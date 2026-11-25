@@ -1,0 +1,5 @@
+/* Import Design System */
+@import './presentation/styles/tokens.css';
+@import './presentation/styles/global.css';
+@import './presentation/styles/components.css';
+@import './presentation/styles/modules.css';
