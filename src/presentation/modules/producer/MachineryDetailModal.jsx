@@ -1,13 +1,15 @@
 import React from 'react';
-import { X, Calendar, MapPin, Gauge, ShieldCheck, UserCheck, Wrench, Phone, MessageSquare } from 'lucide-react';
+import { X, Calendar, MapPin, Gauge, ShieldCheck, UserCheck, Wrench, Phone, MessageSquare, Flag } from 'lucide-react';
 import { RentalCostService } from '../../../services/RentalCostService.js';
 import { Badge } from '../../components/Badge.jsx';
 
 export const MachineryDetailModal = ({
   machinery,
+  currentUser,
   isOpen,
   onClose,
-  onOpenRentModal
+  onOpenRentModal,
+  onReportOwner
 }) => {
   if (!isOpen || !machinery) return null;
 
@@ -144,6 +146,18 @@ export const MachineryDetailModal = ({
           <button className="btn btn-secondary" onClick={onClose}>
             Cerrar
           </button>
+          {currentUser?.id !== machinery.ownerId && (
+            <button
+              className="btn btn-secondary"
+              onClick={() => {
+                onClose();
+                onReportOwner(machinery);
+              }}
+            >
+              <Flag size={16} />
+              Reportar propietario
+            </button>
+          )}
           <button
             className="btn btn-primary"
             onClick={() => {

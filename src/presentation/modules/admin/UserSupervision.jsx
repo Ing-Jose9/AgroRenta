@@ -250,6 +250,12 @@ export const UserSupervision = ({
                         Sin Verificar
                       </span>
                     )}
+                    {u.suspended && (
+                      <div style={{ color: '#fca5a5', display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem', fontWeight: 700, marginTop: '0.3rem' }}>
+                        <ShieldAlert size={14} />
+                        Suspendido por reportes
+                      </div>
+                    )}
                   </td>
 
                   <td>

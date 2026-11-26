@@ -22,7 +22,8 @@ import {
   FolderOpen
 } from 'lucide-react';
 import { CANDELARIA_ZONES, MachineryCategory, RateType } from '../../../core/models/Machinery.js';
-import { saveDocument } from '../../../core/storage/DocumentStorage.js';
+import { saveDocument, saveDocuments } from '../../../core/storage/DocumentStorage.js';
+import { DocumentPurpose, validateDocumentFile, validateDocumentFiles } from '../../../core/security/FileValidation.js';
 
 export const OwnerRegistrationModal = ({
   isOpen,
@@ -77,36 +78,57 @@ export const OwnerRegistrationModal = ({
     { label: 'Aspersora Autopropulsada Jacto', path: 'https://images.unsplash.com/photo-1589923188900-85dae523342b?w=800&auto=format&fit=crop&q=80' }
   ];
 
-  const handleIneUpload = (event) => {
+  const handleIneUpload = async (event) => {
     const files = Array.from(event.target.files || []);
     event.target.value = '';
     if (!files.length) return;
+    setIneFiles([]);
+    setIneFileName('');
 
-    const isPdf = file => file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-    if (files.some(file => (!isPdf(file) && !file.type.startsWith('image/')) || file.size > 8 * 1024 * 1024)) {
-      setErrorMsg('Adjunta un PDF o hasta dos imágenes (JPG, PNG o WebP) de máximo 8 MB cada una.');
+    const isPdf = file => file.type === 'application/pdf' && file.name.toLowerCase().endsWith('.pdf');
+    if (files.some(file => !isPdf(file) && !['image/jpeg', 'image/png', 'image/webp'].includes(file.type))) {
+      setErrorMsg('Adjunta un PDF, JPG, PNG o WebP válido.');
       return;
     }
     if ((files.some(isPdf) && files.length !== 1) || (!files.some(isPdf) && files.length > 2)) {
-      setErrorMsg('Selecciona un solo PDF o dos fotos: frente y reverso de la INE.');
+      setErrorMsg('Selecciona un PDF, una imagen de CURP o las dos caras de la INE.');
       return;
     }
-    setIneFiles(files);
-    setIneFileName(files.map(file => file.name).join(', '));
-    setErrorMsg('');
+    setErrorMsg('Verificando el contenido de la identificación...');
+    try {
+      await validateDocumentFiles(files, {
+        purpose: DocumentPurpose.IDENTITY,
+        identityData: { name, lastName }
+      });
+      setIneFiles(files);
+      setIneFileName(files.map(file => file.name).join(', '));
+      setErrorMsg('');
+    } catch (error) {
+      setErrorMsg(error.message || 'No se pudo verificar la identificación.');
+    }
   };
 
-  const handleOwnershipUpload = (event) => {
+  const handleOwnershipUpload = async (event) => {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
-    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-    if ((!isPdf && !file.type.startsWith('image/')) || file.size > 8 * 1024 * 1024) {
-      setErrorMsg('Adjunta una foto o PDF de máximo 8 MB que acredite la propiedad del equipo.');
+    setOwnershipFile(null);
+    const isPdf = file.type === 'application/pdf' && file.name.toLowerCase().endsWith('.pdf');
+    if (!isPdf && !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setErrorMsg('Adjunta un PDF, JPG, PNG o WebP válido.');
       return;
     }
-    setOwnershipFile(file);
-    setErrorMsg('');
+    setErrorMsg('Verificando que el archivo sea una factura de maquinaria...');
+    try {
+      await validateDocumentFile(file, {
+        purpose: DocumentPurpose.OWNERSHIP,
+        equipmentData: { brand, model, year }
+      });
+      setOwnershipFile(file);
+      setErrorMsg('');
+    } catch (error) {
+      setErrorMsg(error.message || 'No se pudo verificar la factura.');
+    }
   };
 
   const handleDeviceAvatarUpload = (e) => {
@@ -159,8 +181,8 @@ export const OwnerRegistrationModal = ({
         setErrorMsg('Por favor introduce tu correo electrónico.');
         return;
       }
-      if (!ineFiles.length || (ineFiles[0].type !== 'application/pdf' && !ineFiles[0].name.toLowerCase().endsWith('.pdf') && ineFiles.length !== 2)) {
-        setErrorMsg('Adjunta un PDF o las dos fotos de tu INE (frente y reverso).');
+      if (!ineFiles.length || (ineFiles[0].type !== 'application/pdf' && !ineFiles[0].name.toLowerCase().endsWith('.pdf') && ineFiles.length > 2)) {
+        setErrorMsg('Adjunta un PDF, una imagen de CURP o las dos caras de tu INE.');
         return;
       }
       setErrorMsg('');
@@ -171,7 +193,7 @@ export const OwnerRegistrationModal = ({
         return;
       }
       if (!ownershipFile) {
-        setErrorMsg('Adjunta un documento o foto que acredite que la maquinaria es de tu propiedad.');
+        setErrorMsg('Adjunta la factura del tractor o maquinaria.');
         return;
       }
       if (!model.trim()) {
@@ -194,8 +216,16 @@ export const OwnerRegistrationModal = ({
     setIsSaving(true);
     try {
       const [ineDocuments, ownershipDocument] = await Promise.all([
-        Promise.all(ineFiles.map(saveDocument)),
-        saveDocument(ownershipFile)
+        saveDocuments(ineFiles, {
+          purpose: DocumentPurpose.IDENTITY,
+          identityData: { name, lastName },
+          enforceMatch: true
+        }),
+        saveDocument(ownershipFile, {
+          purpose: DocumentPurpose.OWNERSHIP,
+          equipmentData: { brand, model, year },
+          enforceMatch: true
+        })
       ]);
       const ownerPayload = {
         name: name.trim(),
@@ -582,7 +612,7 @@ export const OwnerRegistrationModal = ({
                   <label className="form-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span>
                       <FileText size={14} style={{ display: 'inline', marginRight: '4px' }} />
-                      Credencial INE del Propietario (Frente y Reverso) *
+                      CURP o Credencial INE del Propietario *
                     </span>
                     <span style={{ fontSize: '0.75rem', color: '#fde047' }}>Será verificada por el Administrador</span>
                   </label>
@@ -615,12 +645,12 @@ export const OwnerRegistrationModal = ({
                       <>
                         <UploadCloud size={30} color="var(--accent-400)" />
                         <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                          Sube un PDF o dos imágenes legibles de tu INE (frente y reverso)
+                          Sube un PDF, una imagen de CURP o las dos caras de tu INE. Máx. 5 MB por archivo; verificación OCR local.
                         </div>
                         <input
                           type="file"
                           ref={ineFileInputRef}
-                          accept="image/*,.pdf,application/pdf"
+                          accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
                           multiple
                           onChange={handleIneUpload}
                           style={{ display: 'none' }}
@@ -631,7 +661,7 @@ export const OwnerRegistrationModal = ({
                           onClick={() => ineFileInputRef.current?.click()}
                           style={{ marginTop: '0.25rem' }}
                         >
-                          Subir Credencial INE (Archivo)
+                          Subir CURP / Credencial INE
                         </button>
                       </>
                     )}
@@ -659,11 +689,11 @@ export const OwnerRegistrationModal = ({
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Documento que acredita la propiedad de la maquinaria *</label>
+                  <label className="form-label">Factura del tractor o maquinaria *</label>
                   <input
                     type="file"
                     ref={ownershipFileInputRef}
-                    accept="image/*,.pdf,application/pdf"
+                    accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
                     onChange={handleOwnershipUpload}
                     style={{ display: 'none' }}
                   />
@@ -674,7 +704,7 @@ export const OwnerRegistrationModal = ({
                     style={{ alignSelf: 'flex-start' }}
                   >
                     <FolderOpen size={14} />
-                    {ownershipFile?.name || 'Subir factura, tarjeta de circulación u otro comprobante'}
+                    {ownershipFile?.name || 'Subir factura (PDF, JPG, PNG o WebP; máx. 5 MB)'}
                   </button>
                 </div>
 
@@ -1007,7 +1037,7 @@ export const OwnerRegistrationModal = ({
                 }}>
                   <AlertCircle size={20} color="#fde047" style={{ flexShrink: 0, marginTop: '2px' }} />
                   <div style={{ fontSize: '0.825rem', color: '#fef08a' }}>
-                    <strong>Flujo de Aprobación de Candelaria:</strong> Tu cuenta y tu maquinaria quedarán en estado <strong>Pendiente de Revisión</strong>. El Administrador verificará tu INE, el comprobante de propiedad y las fotos del equipo.
+                    <strong>Flujo de Aprobación de Candelaria:</strong> Tu cuenta y tu maquinaria quedarán en estado <strong>Pendiente de Revisión</strong>. El Administrador verificará tu identificación, la factura y las fotos del equipo.
                   </div>
                 </div>
               </div>

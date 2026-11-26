@@ -34,6 +34,13 @@ export const Badge = ({ status, type = 'machinery' }) => {
             Rechazado
           </span>
         );
+      case MachineryStatus.SUSPENDED:
+        return (
+          <span className="badge badge-rejected">
+            <AlertTriangle size={12} />
+            Suspendido
+          </span>
+        );
       default:
         return <span className="badge">{status}</span>;
     }

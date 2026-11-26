@@ -16,7 +16,8 @@ import {
   Camera
 } from 'lucide-react';
 import { CANDELARIA_ZONES } from '../../../core/models/Machinery.js';
-import { saveDocument } from '../../../core/storage/DocumentStorage.js';
+import { saveDocuments } from '../../../core/storage/DocumentStorage.js';
+import { DocumentPurpose, validateDocumentFiles } from '../../../core/security/FileValidation.js';
 
 export const ProducerRegistrationModal = ({
   isOpen,
@@ -40,23 +41,33 @@ export const ProducerRegistrationModal = ({
   const avatarInputRef = useRef(null);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const handleIneUpload = (event) => {
+  const handleIneUpload = async (event) => {
     const files = Array.from(event.target.files || []);
     event.target.value = '';
     if (!files.length) return;
+    setIneFiles([]);
 
-    const isPdf = file => file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-    const validTypes = files.every(file => isPdf(file) || file.type.startsWith('image/'));
-    if (!validTypes || files.some(file => file.size > 8 * 1024 * 1024)) {
-      setErrorMsg('Adjunta un PDF o hasta dos imágenes (JPG, PNG o WebP) de máximo 8 MB cada una.');
+    const isPdf = file => file.type === 'application/pdf' && file.name.toLowerCase().endsWith('.pdf');
+    const validTypes = files.every(file => isPdf(file) || ['image/jpeg', 'image/png', 'image/webp'].includes(file.type));
+    if (!validTypes) {
+      setErrorMsg('Adjunta un PDF, JPG, PNG o WebP válido.');
       return;
     }
     if ((files.some(isPdf) && files.length !== 1) || (!files.some(isPdf) && files.length > 2)) {
-      setErrorMsg('Selecciona un solo PDF o dos fotos: frente y reverso de la INE.');
+      setErrorMsg('Selecciona un PDF, una imagen de CURP o las dos caras de la INE.');
       return;
     }
-    setIneFiles(files);
-    setErrorMsg('');
+    setErrorMsg('Verificando el contenido de la identificación...');
+    try {
+      await validateDocumentFiles(files, {
+        purpose: DocumentPurpose.IDENTITY,
+        identityData: { name, lastName }
+      });
+      setIneFiles(files);
+      setErrorMsg('');
+    } catch (error) {
+      setErrorMsg(error.message || 'No se pudo verificar la identificación.');
+    }
   };
 
   const handleDeviceAvatarUpload = (e) => {
@@ -102,14 +113,18 @@ export const ProducerRegistrationModal = ({
       setErrorMsg('La contraseña debe tener al menos 8 caracteres.');
       return;
     }
-    if (!ineFiles.length || (ineFiles[0].type !== 'application/pdf' && !ineFiles[0].name.toLowerCase().endsWith('.pdf') && ineFiles.length !== 2)) {
-      setErrorMsg('Adjunta un PDF o las dos fotos de tu INE (frente y reverso).');
+    if (!ineFiles.length || (ineFiles[0].type !== 'application/pdf' && !ineFiles[0].name.toLowerCase().endsWith('.pdf') && ineFiles.length > 2)) {
+      setErrorMsg('Adjunta un PDF, una imagen de CURP o las dos caras de tu INE.');
       return;
     }
 
     setIsSaving(true);
     try {
-      const ineDocuments = await Promise.all(ineFiles.map(saveDocument));
+      const ineDocuments = await saveDocuments(ineFiles, {
+        purpose: DocumentPurpose.IDENTITY,
+        identityData: { name, lastName },
+        enforceMatch: true
+      });
       const registered = await onRegisterProducer({
         name: name.trim(),
         lastName: lastName.trim(),
@@ -387,7 +402,7 @@ export const ProducerRegistrationModal = ({
               <label className="form-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span>
                   <FileText size={14} style={{ display: 'inline', marginRight: '4px' }} />
-                  Credencial INE (Identificación Oficial) *
+                  CURP o Credencial INE (Identificación Oficial) *
                 </span>
                 <span style={{ fontSize: '0.75rem', color: '#86efac' }}>Requerido para seguridad del arrendador</span>
               </label>
@@ -420,12 +435,12 @@ export const ProducerRegistrationModal = ({
                   <>
                     <UploadCloud size={30} color="var(--primary-400)" />
                     <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                      Selecciona un PDF o dos imágenes de tu INE (frente y reverso)
+                      Selecciona un PDF, una imagen de CURP o las dos imágenes de tu INE. Máx. 5 MB por archivo; se verifica con OCR local.
                     </div>
                     <input
                       type="file"
                       ref={fileInputRef}
-                      accept="image/*,.pdf,application/pdf"
+                      accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
                       multiple
                       onChange={handleIneUpload}
                       style={{ display: 'none' }}
@@ -436,7 +451,7 @@ export const ProducerRegistrationModal = ({
                       onClick={() => fileInputRef.current?.click()}
                       style={{ marginTop: '0.25rem' }}
                     >
-                      Seleccionar Archivo de Credencial INE
+                      Seleccionar CURP / Credencial INE
                     </button>
                   </>
                 )}

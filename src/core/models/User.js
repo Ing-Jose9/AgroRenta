@@ -35,6 +35,8 @@ export class User {
     ineDocuments = [],
     rejectionReason = '',
     pendingMachinery = null,
+    suspended = false,
+    suspensionReason = '',
     createdAt = new Date().toISOString()
   }) {
     this.id = id;
@@ -55,6 +57,8 @@ export class User {
     this.ineDocuments = ineDocuments;
     this.rejectionReason = rejectionReason;
     this.pendingMachinery = pendingMachinery;
+    this.suspended = suspended;
+    this.suspensionReason = suspensionReason;
     this.createdAt = createdAt;
   }
 }

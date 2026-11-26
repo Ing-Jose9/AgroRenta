@@ -1,4 +1,4 @@
-import { validateDocumentFile, safeFileName } from '../security/FileValidation.js';
+import { validateDocumentFile, validateDocumentFiles, safeFileName } from '../security/FileValidation.js';
 
 const DATABASE_NAME = 'agrorenta_documents';
 const STORE_NAME = 'documents';
@@ -19,8 +19,7 @@ const openDatabase = () => new Promise((resolve, reject) => {
   request.onerror = () => reject(request.error || new Error('No se pudo abrir el almacenamiento de documentos.'));
 });
 
-export const saveDocument = async (file) => {
-  await validateDocumentFile(file);
+const storeDocument = async (file) => {
   const database = await openDatabase();
   const document = {
     id: window.crypto.randomUUID
@@ -44,6 +43,16 @@ export const saveDocument = async (file) => {
   }
 
   return { id: document.id, name: document.name, type: document.type };
+};
+
+export const saveDocument = async (file, options) => {
+  await validateDocumentFile(file, options);
+  return storeDocument(file);
+};
+
+export const saveDocuments = async (files, options) => {
+  await validateDocumentFiles(files, options);
+  return Promise.all(files.map(storeDocument));
 };
 
 export const getDocumentBlob = async (id) => {

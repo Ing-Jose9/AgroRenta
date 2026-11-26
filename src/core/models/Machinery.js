@@ -21,7 +21,8 @@ export const MachineryStatus = {
   ACTIVE: 'ACTIVE',               // Aprobado y listo para renta
   PENDING_REVIEW: 'PENDING_REVIEW', // En espera de moderación admin
   REJECTED: 'REJECTED',           // Rechazado por fraude o inconsistencia
-  MAINTENANCE: 'MAINTENANCE'      // Bloqueado temporalmente por reparación
+  MAINTENANCE: 'MAINTENANCE',     // Bloqueado temporalmente por reparación
+  SUSPENDED: 'SUSPENDED'          // Oculto por suspensión del propietario
 };
 
 export const CANDELARIA_ZONES = [

@@ -3,6 +3,7 @@ import { X, Gauge, AlertCircle, Plus, Image } from 'lucide-react';
 import { MachineryCategory, RateType, CANDELARIA_ZONES, MachineryStatus } from '../../../core/models/Machinery.js';
 import { ModerationService } from '../../../services/ModerationService.js';
 import { saveDocument } from '../../../core/storage/DocumentStorage.js';
+import { DocumentPurpose, validateDocumentFile } from '../../../core/security/FileValidation.js';
 
 export const AddMachineryModal = ({
   isOpen,
@@ -36,29 +37,43 @@ export const AddMachineryModal = ({
     { label: 'Tractor New Holland 4WD', path: 'https://images.unsplash.com/photo-1592878904946-b3cd8ae243d0?w=800&auto=format&fit=crop&q=80' }
   ];
 
-  const handleOwnershipUpload = (event) => {
+  const handleOwnershipUpload = async (event) => {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
-    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-    if ((!isPdf && !file.type.startsWith('image/')) || file.size > 8 * 1024 * 1024) {
-      setErrorMsg('Adjunta una foto o PDF de máximo 8 MB que acredite la propiedad del equipo.');
+    setOwnershipFile(null);
+    const isPdf = file.type === 'application/pdf' && file.name.toLowerCase().endsWith('.pdf');
+    if (!isPdf && !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setErrorMsg('Adjunta un PDF, JPG, PNG o WebP válido.');
       return;
     }
-    setOwnershipFile(file);
-    setErrorMsg('');
+    setErrorMsg('Verificando que el archivo sea una factura de maquinaria...');
+    try {
+      await validateDocumentFile(file, {
+        purpose: DocumentPurpose.OWNERSHIP,
+        equipmentData: { brand, model, year }
+      });
+      setOwnershipFile(file);
+      setErrorMsg('');
+    } catch (error) {
+      setErrorMsg(error.message || 'No se pudo verificar la factura.');
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!ownershipFile) {
-      setErrorMsg('Adjunta un documento o foto que acredite que la maquinaria es de tu propiedad.');
+      setErrorMsg('Adjunta la factura del tractor o maquinaria.');
       return;
     }
 
     setIsSaving(true);
     try {
-      const ownershipDocument = await saveDocument(ownershipFile);
+      const ownershipDocument = await saveDocument(ownershipFile, {
+        purpose: DocumentPurpose.OWNERSHIP,
+        equipmentData: { brand, model, year },
+        enforceMatch: true
+      });
       const listingData = {
       title,
       category,
@@ -151,11 +166,11 @@ export const AddMachineryModal = ({
             </div>
 
             <div className="form-group">
-              <label className="form-label">Documento que acredita la propiedad de la maquinaria *</label>
+              <label className="form-label">Factura del tractor o maquinaria *</label>
               <input
                 type="file"
                 ref={ownershipFileInputRef}
-                accept="image/*,.pdf,application/pdf"
+                accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
                 onChange={handleOwnershipUpload}
                 style={{ display: 'none' }}
               />
@@ -166,7 +181,7 @@ export const AddMachineryModal = ({
                 style={{ alignSelf: 'flex-start' }}
               >
                 <Image size={14} />
-                {ownershipFile?.name || 'Subir factura, tarjeta de circulación u otro comprobante'}
+                {ownershipFile?.name || 'Subir factura del tractor (PDF, JPG, PNG o WebP; máx. 5 MB)'}
               </button>
             </div>
 

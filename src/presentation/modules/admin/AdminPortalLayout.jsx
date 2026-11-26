@@ -24,6 +24,7 @@ import { AdminRentalsMonitor } from './AdminRentalsMonitor.jsx';
 import { AdminZonesManager } from './AdminZonesManager.jsx';
 import { AnalyticsDashboard } from './AnalyticsDashboard.jsx';
 import { AdminAuditLog } from './AdminAuditLog.jsx';
+import { AdminReportsInbox } from './AdminReportsInbox.jsx';
 import { UserApprovalStatus } from '../../../core/models/User.js';
 import { MachineryStatus } from '../../../core/models/Machinery.js';
 import { ReservationStatus } from '../../../core/models/Reservation.js';
@@ -32,6 +33,7 @@ export const AdminPortalLayout = ({
   users = [],
   machineryList = [],
   reservations = [],
+  reports = [],
   currentUser,
   onExitAdmin,
   onApproveMachinery,
@@ -382,7 +384,10 @@ export const AdminPortalLayout = ({
           )}
 
           {activeModule === 'reportes' && (
-            <AnalyticsDashboard />
+            <>
+              <AdminReportsInbox reports={reports} users={users} />
+              <AnalyticsDashboard />
+            </>
           )}
 
           {activeModule === 'auditoria' && (

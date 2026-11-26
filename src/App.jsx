@@ -3,12 +3,14 @@ import { UserRole } from './core/models/User.js';
 import { userRepository } from './core/repositories/UserRepository.js';
 import { machineryRepository } from './core/repositories/MachineryRepository.js';
 import { reservationRepository } from './core/repositories/ReservationRepository.js';
+import { reportRepository } from './core/repositories/ReportRepository.js';
 import { AuthService } from './services/AuthService.js';
 import { ModerationService } from './services/ModerationService.js';
 import { AuditService } from './services/AuditService.js';
 import { ReservationStatus } from './core/models/Reservation.js';
 import { saveDocument } from './core/storage/DocumentStorage.js';
 import { NotificationService } from './services/NotificationService.js';
+import { ReportService } from './services/ReportService.js';
 import { hashPassword } from './core/security/PasswordSecurity.js';
 
 // Presentation Layer - Public / Field Modules (Productor & Propietario)
@@ -17,6 +19,7 @@ import { ProducerCatalog } from './presentation/modules/producer/ProducerCatalog
 import { MachineryDetailModal } from './presentation/modules/producer/MachineryDetailModal.jsx';
 import { RentalRequestModal } from './presentation/modules/producer/RentalRequestModal.jsx';
 import { ReservationHistory } from './presentation/modules/producer/ReservationHistory.jsx';
+import { ReportOwnerModal } from './presentation/modules/producer/ReportOwnerModal.jsx';
 import { OwnerFleetManager } from './presentation/modules/owner/OwnerFleetManager.jsx';
 import { AddMachineryModal } from './presentation/modules/owner/AddMachineryModal.jsx';
 import { AuthModal } from './presentation/modules/auth/AuthModal.jsx';
@@ -45,10 +48,12 @@ export default function App() {
   const [allUsers, setAllUsers] = useState(() => userRepository.getAll());
   const [machineryList, setMachineryList] = useState(() => machineryRepository.getAll());
   const [reservations, setReservations] = useState(() => reservationRepository.getAll());
+  const [reports, setReports] = useState(() => reportRepository.getAll());
 
   // Modals state
   const [selectedMachineryForDetail, setSelectedMachineryForDetail] = useState(null);
   const [selectedMachineryForRent, setSelectedMachineryForRent] = useState(null);
+  const [selectedMachineryForReport, setSelectedMachineryForReport] = useState(null);
   const [isAddMachineryOpen, setIsAddMachineryOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isProducerRegisterOpen, setIsProducerRegisterOpen] = useState(false);
@@ -67,6 +72,7 @@ export default function App() {
     setAllUsers(userRepository.getAll());
     setMachineryList(machineryRepository.getAll());
     setReservations(reservationRepository.getAll());
+    setReports(reportRepository.getAll());
     setCurrentUser(AuthService.getCurrentUser());
   }, []);
 
@@ -155,6 +161,10 @@ export default function App() {
 
   // 3. Owner Actions
   const handleSaveMachinery = (machineryData) => {
+    if (currentUser?.suspended) {
+      showToast('La cuenta está suspendida y no puede publicar maquinaria.');
+      return;
+    }
     const created = machineryRepository.create(machineryData);
     AuditService.log({
       action: 'ALTA_MAQUINARIA',
@@ -211,6 +221,10 @@ export default function App() {
   // 4. Admin Actions
   const handleApproveMachineryAdmin = (machineryId) => {
     const mac = machineryList.find(m => m.id === machineryId);
+    if (allUsers.find(user => user.id === mac?.ownerId)?.suspended) {
+      showToast('No se puede aprobar maquinaria de un propietario suspendido.');
+      return;
+    }
     ModerationService.approveMachinery(machineryId);
     AuditService.log({
       action: 'MODERACION_APROBADA',
@@ -252,6 +266,10 @@ export default function App() {
 
   const handleApproveOwnerAdmin = (ownerId) => {
     const owner = allUsers.find(u => u.id === ownerId);
+    if (owner?.suspended) {
+      showToast('No se puede aprobar la cuenta de un propietario suspendido.');
+      return;
+    }
     AuthService.approveOwner(ownerId);
     AuditService.log({
       action: 'APROBACION_PROPIETARIO',
@@ -302,6 +320,30 @@ export default function App() {
     });
     refreshData();
     showToast(`Renta #${reservationId} actualizada a ${newStatus}.`);
+  };
+
+  const handleSubmitOwnerReport = (reportData) => {
+    const result = ReportService.submit(reportData);
+    AuditService.log({
+      action: 'REPORTE_PROPIETARIO',
+      category: 'SEGURIDAD',
+      target: result.report.reportedOwnerName,
+      details: `Reportó: ${result.report.reporterName}. Causa: ${result.report.cause}`,
+      status: result.suspended ? 'WARNING' : 'INFO'
+    });
+    refreshData();
+    showToast(result.suspended
+      ? 'Reporte registrado. El propietario alcanzó tres reportes y fue suspendido.'
+      : `Reporte registrado (${result.reportCount} de 3).`);
+    return result;
+  };
+
+  const handleOpenOwnerReport = (machinery) => {
+    if (!currentUser) {
+      showToast('Inicia sesión o crea una cuenta para reportar a un propietario.');
+      return;
+    }
+    setSelectedMachineryForReport(machinery);
   };
 
   // 5. User / Auth Actions
@@ -391,6 +433,7 @@ export default function App() {
           users={allUsers}
           machineryList={machineryList}
           reservations={reservations}
+          reports={reports}
           currentUser={currentUser}
           onExitAdmin={() => {
             window.history.pushState({}, '', '/');
@@ -478,7 +521,12 @@ export default function App() {
 
         {/* ROLE B: PROPIETARIO / PROVEEDOR (Los que ponen en renta) */}
         {activeRole === UserRole.OWNER && (
-          <OwnerFleetManager
+          currentUser?.suspended ? (
+            <section className="glass-panel" role="status" style={{ maxWidth: '760px', margin: '3rem auto', padding: '2rem', textAlign: 'center' }}>
+              <h2 style={{ color: '#fca5a5', marginBottom: '0.75rem' }}>Cuenta de propietario suspendida</h2>
+              <p>{currentUser.suspensionReason || 'La cuenta y su maquinaria están suspendidas tras recibir tres reportes.'}</p>
+            </section>
+          ) : <OwnerFleetManager
             currentUser={currentUser}
             fleet={currentOwnerFleet}
             requests={currentOwnerRequests}
@@ -497,10 +545,21 @@ export default function App() {
       {/* Detail Modal */}
       <MachineryDetailModal
         machinery={selectedMachineryForDetail}
+        currentUser={currentUser}
         isOpen={Boolean(selectedMachineryForDetail)}
         onClose={() => setSelectedMachineryForDetail(null)}
         onOpenRentModal={(mac) => setSelectedMachineryForRent(mac)}
+        onReportOwner={handleOpenOwnerReport}
       />
+
+      {selectedMachineryForReport && (
+        <ReportOwnerModal
+          machinery={selectedMachineryForReport}
+          currentUser={currentUser}
+          onClose={() => setSelectedMachineryForReport(null)}
+          onSubmitReport={handleSubmitOwnerReport}
+        />
+      )}
 
       {/* Rental Request Modal */}
       <RentalRequestModal

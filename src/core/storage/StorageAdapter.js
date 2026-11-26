@@ -9,6 +9,7 @@ const STORAGE_KEYS = {
   USERS: 'agrorenta_users_v4',
   MACHINERY: 'agrorenta_machinery_v4',
   RESERVATIONS: 'agrorenta_reservations_v4',
+  REPORTS: 'agrorenta_reports_v1',
   CURRENT_USER_ID: 'agrorenta_current_user_id_v4',
   INITIAL_OWNERS_MIGRATED: 'agrorenta_initial_owners_migrated_v2'
 };
@@ -47,6 +48,9 @@ class StorageAdapter {
     }
     if (!localStorage.getItem(STORAGE_KEYS.RESERVATIONS)) {
       this.set(STORAGE_KEYS.RESERVATIONS, SEED_RESERVATIONS, false);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.REPORTS)) {
+      this.set(STORAGE_KEYS.REPORTS, [], false);
     }
     if (!localStorage.getItem(STORAGE_KEYS.INITIAL_OWNERS_MIGRATED)) {
       const users = this.get(STORAGE_KEYS.USERS, []);
@@ -101,6 +105,7 @@ class StorageAdapter {
     this.set(STORAGE_KEYS.USERS, SEED_USERS);
     this.set(STORAGE_KEYS.MACHINERY, SEED_MACHINERY);
     this.set(STORAGE_KEYS.RESERVATIONS, SEED_RESERVATIONS);
+    this.set(STORAGE_KEYS.REPORTS, []);
     this.set(STORAGE_KEYS.CURRENT_USER_ID, null);
   }
 }

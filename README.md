@@ -10,6 +10,8 @@ npm run dev
 El portal público se abre en `/` y el módulo de administración en `/admin`.
 Los archivos de prueba (INE, comprobantes y documentos de propiedad) se guardan en IndexedDB del navegador actual; no se sincronizan entre dispositivos ni deben usarse para información personal real.
 
+Consulta la [guía funcional del sitio](./FUNCIONALIDAD-DEL-SITIO.md) para conocer los portales, formularios y acciones de cada botón.
+
 ## Notificaciones SMS
 
 La interfaz puede conectarse a una API configurando `VITE_API_BASE_URL` (ver `.env.example`). La API debe implementar:
